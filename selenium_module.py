@@ -24,13 +24,16 @@ def download_file_from_url(url: str, download_dir: str = "downloads"):
     prefs = {
         "download.default_directory": download_dir, # 다운로드 경로
         "download.prompt_for_download": False,       # 다운로드 시 저장 위치
-        "safebrowsing.enabled": True                 # 안전 브라우징 활성화
+        "safebrowsing.enabled": True,               # 안전 브라우징 활성화
     }
 
     chrome_options.add_experimental_option("prefs", prefs)
 
     # Chrome WebDriver 인스턴스 생성
     driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chrome_options)
+
+    #기존 downloads 폴더 기록
+    initial_files = set(os.listdir(download_dir))
 
     # 페이지 이동
     driver.get(url)
@@ -45,6 +48,8 @@ def download_file_from_url(url: str, download_dir: str = "downloads"):
             print(f"Alert detected with text: {alert.text}")
             alert.accept()  # 경고창 수락 (확인 버튼 클릭)
             print("Alert accepted.")
+            time.sleep(5)  # 5초 대기
+
         except NoAlertPresentException:
             print("No alert present.")
 
@@ -54,32 +59,43 @@ def download_file_from_url(url: str, download_dir: str = "downloads"):
         print("Unexpected alert accepted.")
 
     # 다운로드 완료 감지 함수
-    def wait_for_downloads(directory, timeout=1000):
-        """지정된 디렉토리에서 다운로드 완료를 대기."""
+    def wait_for_downloads(directory, timeout=1000)->str:
+        """
+        지정된 디렉토리에서 다운로드 완료를 대기.
+        :param directory: 다운로드 디렉토리
+        :param timeout: 최대 대기 시간
+        :return: 다운로드된 파일 이름
+        """
         end_time = time.time() + timeout
         while time.time() < end_time:
-            files = os.listdir(directory)
-            downloading = any(file.endswith(".crdownload") for file in files)
-            completed = any(file for file in files if not file.endswith(".crdownload"))
+            files = set(os.listdir(directory))
+            new_files = files - initial_files
 
-            if not downloading and completed:
-                # 다운로드 완료
-                return True
+            if new_files:
+                for file in new_files:
+                    if not file.endswith(".crdownload"):
+                        return file
 
             print("Waiting for download...")
             time.sleep(1)  # 1초 대기
-        return False
+        return ""
 
     # 다운로드 완료 대기
-    if wait_for_downloads(download_dir):
-        print(f"파일 다운로드가 완료되었습니다: {download_dir}")
+    downloaded_file = wait_for_downloads(download_dir)
+    if downloaded_file:
+        print(f"파일 다운로드가 완료되었습니다: {downloaded_file}")
     else:
         print("다운로드가 지정된 시간 내에 완료되지 않았습니다.")
+        downloaded_file
 
     # 브라우저 종료
     driver.quit()
+    return downloaded_file
 
 # 예시로 다른 파일에서 URL을 전달
 if __name__ == "__main__":
-    url = 'https://www.data.go.kr/data/15083033/fileData.do'  # 여기서 URL을 입력
-    download_file_from_url(url)
+    # url = 'https://www.data.go.kr/data/15083033/fileData.do'  
+    url = "https://www.data.go.kr/data/15028160/fileData.do"
+
+    downloaded_file = download_file_from_url(url)
+    print(downloaded_file)
